@@ -1,0 +1,42 @@
+:root {
+  --blocksy-bg: #f3f5f9;
+  --blocksy-surface: #ffffff;
+  --blocksy-border: #d9e1ef;
+  --blocksy-text: #1f2937;
+  --blocksy-muted: #64748b;
+  --blocksy-brand: #0f766e;
+  --blocksy-brand-soft: #14b8a6;
+  --blocksy-accent: #f59e0b;
+  --el-color-primary: #0f766e;
+  --el-color-primary-light-3: #2ea39a;
+  --el-color-primary-light-5: #5fbfb8;
+  --el-color-primary-light-7: #8ad6d1;
+  --el-color-primary-light-8: #afe4e0;
+  --el-color-primary-light-9: #d7f3f1;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at 0 0, #f7fafc 0%, var(--blocksy-bg) 35%, #eef2f7 100%);
+  color: var(--blocksy-text);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.el-main {
+  padding: 18px !important;
+}
+
+.el-button {
+  border-radius: 10px !important;
+  font-weight: 600;
+}
+
+.el-card {
+  border-radius: 14px !important;
+}

@@ -1,0 +1,8 @@
+import { createApp } from "vue";
+import { createPinia } from "pinia";
+import App from "./App.vue";
+import { installUniWebPolyfill } from "./polyfills/uni-web";
+
+installUniWebPolyfill();
+
+createApp(App).use(createPinia()).mount("#app");

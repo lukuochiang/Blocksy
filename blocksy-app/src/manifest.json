@@ -1,0 +1,19 @@
+{
+  "name": "Norvo",
+  "appid": "__UNI__blocksy",
+  "description": "Norvo App",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "h5": {
+    "title": "Norvo",
+    "router": {
+      "mode": "hash",
+      "base": "./"
+    },
+    "devServer": {
+      "port": 5174,
+      "https": false
+    }
+  }
+}

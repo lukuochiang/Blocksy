@@ -1,0 +1,58 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationBarTitleText": "首页"
+      }
+    },
+    {
+      "path": "pages/community/index",
+      "style": {
+        "navigationBarTitleText": "选择社区"
+      }
+    },
+    {
+      "path": "pages/post/index",
+      "style": {
+        "navigationBarTitleText": "邻里圈"
+      }
+    },
+    {
+      "path": "pages/my-post/index",
+      "style": {
+        "navigationBarTitleText": "我的帖子"
+      }
+    },
+    {
+      "path": "pages/listing/index",
+      "style": {
+        "navigationBarTitleText": "分类信息"
+      }
+    },
+    {
+      "path": "pages/event/index",
+      "style": {
+        "navigationBarTitleText": "社区活动"
+      }
+    },
+    {
+      "path": "pages/message/index",
+      "style": {
+        "navigationBarTitleText": "消息"
+      }
+    },
+    {
+      "path": "pages/mine/index",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    }
+  ]
+}

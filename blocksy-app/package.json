@@ -1,0 +1,22 @@
+{
+  "name": "blocksy-app",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-5000620260331001",
+    "@dcloudio/uni-components": "^3.0.0-5000620260331001",
+    "pinia": "2.1.7",
+    "vue": "3.4.21"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "^3.4.13",
+    "@dcloudio/vite-plugin-uni": "3.0.0-5000620260331001",
+    "typescript": "^5.8.3",
+    "vite": "5.2.8"
+  }
+}
