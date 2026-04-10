@@ -14,12 +14,14 @@
         <button class="quick-btn" @click="goCommunity">切换社区</button>
         <button class="quick-btn" @click="goPost">发布帖子</button>
         <button class="quick-btn" @click="goEvent">社区活动</button>
-        <button class="quick-btn" @click="reload">刷新动态</button>
+        <button class="quick-btn" :class="{ 'is-loading': loading }" :disabled="loading" @click="reload">
+          {{ loading ? "刷新中..." : "刷新动态" }}
+        </button>
       </view>
 
       <view class="subtitle">最新帖子</view>
       <skeleton-list v-if="loading" :count="3" />
-      <view v-for="item in pagedPosts" :key="item.id" class="card">
+      <view v-for="item in posts" :key="item.id" class="card">
         <view class="content">{{ item.content }}</view>
         <view class="meta">#{{ item.id }} · 评论 {{ item.commentCount }} · {{ formatDateTime(item.createdAt) }}</view>
         <view class="ops">
@@ -36,19 +38,19 @@
         @cta="goPost"
       />
       <list-pager
-        v-if="!loading && posts.length > pageSize"
+        v-if="!loading && total > pageSize"
         :page="page"
         :page-size="pageSize"
-        :total="posts.length"
-        @prev="prevPage"
-        @next="nextPage"
+        :total="total"
+        @prev="onPrevPage"
+        @next="onNextPage"
       />
     </view>
     <view class="side-col">
       <view class="side-card enter enter-delay-1">
         <view class="side-title">社区面板</view>
         <view class="side-line">当前社区：{{ currentCommunityName || "未选择" }}</view>
-        <view class="side-line">动态数量：{{ posts.length }}</view>
+        <view class="side-line">动态数量：{{ total }}</view>
         <view class="side-line">登录用户：{{ userStore.displayName || "未登录" }}</view>
       </view>
       <view class="side-card enter enter-delay-2">
@@ -79,11 +81,8 @@ userStore.hydrate();
 const posts = ref<PostItem[]>([]);
 const loading = ref(false);
 const page = ref(1);
-const pageSize = 5;
-const pagedPosts = computed(() => {
-  const start = (page.value - 1) * pageSize;
-  return posts.value.slice(start, start + pageSize);
-});
+const pageSize = ref(5);
+const total = ref(0);
 
 const currentCommunityName = computed(() => {
   const community = userStore.communities.find((item) => item.communityId === userStore.currentCommunityId);
@@ -91,6 +90,10 @@ const currentCommunityName = computed(() => {
 });
 
 async function reload() {
+  await loadPage(1);
+}
+
+async function loadPage(targetPage: number) {
   loading.value = true;
   try {
     await withMinDuration(async () => {
@@ -98,14 +101,36 @@ async function reload() {
         await userStore.fetchMe();
         await userStore.fetchCommunities();
       }
-      posts.value = await getPostList(userStore.currentCommunityId || undefined);
+      const response = await getPostList({
+        communityId: userStore.currentCommunityId || undefined,
+        page: targetPage,
+        pageSize: pageSize.value
+      });
+      posts.value = response.items || [];
+      total.value = response.total || 0;
+      page.value = response.page || targetPage;
+      pageSize.value = response.pageSize || pageSize.value;
     });
-    page.value = 1;
   } catch (error) {
     uni.showToast({ title: (error as Error).message || "加载失败", icon: "none" });
   } finally {
     loading.value = false;
   }
+}
+
+function onPrevPage() {
+  if (page.value <= 1 || loading.value) {
+    return;
+  }
+  void loadPage(page.value - 1);
+}
+
+function onNextPage() {
+  const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value));
+  if (page.value >= maxPage || loading.value) {
+    return;
+  }
+  void loadPage(page.value + 1);
 }
 
 async function reportPost(postId: number) {
@@ -135,21 +160,6 @@ function goPost() {
 
 function goEvent() {
   uni.navigateTo({ url: "/pages/event/index" });
-}
-
-function prevPage() {
-  if (page.value <= 1) {
-    return;
-  }
-  page.value -= 1;
-}
-
-function nextPage() {
-  const totalPages = Math.ceil(posts.value.length / pageSize);
-  if (page.value >= totalPages) {
-    return;
-  }
-  page.value += 1;
 }
 
 onMounted(() => {
@@ -207,6 +217,7 @@ const { pullStatus, pullOffset, pullText } = useH5PullRefresh(async () => {
 }
 
 .quick-btn {
+  position: relative;
   background: var(--surface);
   backdrop-filter: blur(8px);
   border: 1px solid #d5e2f5;
@@ -214,6 +225,24 @@ const { pullStatus, pullOffset, pullText } = useH5PullRefresh(async () => {
   padding: 12px;
   font-weight: 600;
   box-shadow: var(--shadow-soft);
+}
+
+.quick-btn.is-loading {
+  padding-right: 28px;
+}
+
+.quick-btn.is-loading::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
 }
 
 .subtitle {

@@ -2,6 +2,31 @@
 
 Norvo 是一个“本地社区 / 邻里社交 / 分类信息平台”的 MVP 骨架工程。当前版本聚焦于本地开发可运行、结构清晰、方便后续扩展。
 
+## 0. 开发推进文档
+
+- 模块状态矩阵与两周排期（2026-04-09 ~ 2026-04-22）：
+  - `docs/module-status-and-2week-plan.md`
+- V5 优先闭环（帖子治理 + 分页搜索 + 社区维度统一）：
+  - `docs/v5-priority-post-governance-closure.md`
+- V5 通知中心后台实施计划：
+  - `docs/v5-notification-center-admin-plan.md`
+- V5 通知中心已实现与后台菜单去占位化：
+  - `docs/v5-notification-center-implementation.md`
+- V5 Top3 菜单真实业务页：
+  - `docs/v5-top3-admin-real-pages.md`
+- V5 第二批菜单真实业务页：
+  - `docs/v5-second-batch-real-pages.md`
+- V5 第三批菜单真实业务页：
+  - `docs/v5-third-batch-real-pages.md`
+- V5 第四批菜单真实业务页：
+  - `docs/v5-fourth-batch-real-pages.md`
+- V5 后续批次安排：
+  - `docs/v5-next-batches-plan.md`
+- V5 Batch 5~9 一体化落地记录：
+  - `docs/v5-batch5-9-implementation.md`
+- V6 Day1-7 执行记录：
+  - `docs/v6-day1-7-execution.md`
+
 ## 1. 项目结构
 
 ```text
@@ -68,6 +93,18 @@ cd blocksy-server
 mvn spring-boot:run
 ```
 
+数据库迁移（已接入 Flyway）：
+
+- 后端启动时会自动执行 `blocksy-server/src/main/resources/db/migration` 下的迁移脚本
+- 当前基线脚本：`V1__init_schema.sql`
+- 可通过以下 SQL 验证迁移记录：
+
+```sql
+SELECT installed_rank, version, description, success
+FROM flyway_schema_history
+ORDER BY installed_rank;
+```
+
 默认端口：`8080`
 
 核心配置文件：`blocksy-server/src/main/resources/application.yml`
@@ -120,6 +157,10 @@ minio:
 - `GET /api/communities`
 - `GET /api/listings`
 - `POST /api/listings`
+- `POST /api/listings/mine/{id}/offline`
+- `POST /api/listings/mine/{id}/resubmit`
+- `POST /api/listings/mine/{id}/delete`
+- `GET /api/listings/mine/{id}/logs`
 - `GET /api/events`
 - `POST /api/events`
 - `POST /api/events/{id}/signup`
@@ -127,12 +168,87 @@ minio:
 - `POST /api/reports`
 - `GET /api/admin/reports`
 - `POST /api/admin/reports/{id}/handle`
+- `POST /api/admin/reports/batch-handle`
+- `GET /api/admin/reports/{id}/logs`
 - `GET /api/admin/users`
 - `POST /api/admin/users/{id}/ban`
 - `POST /api/admin/users/{id}/unban`
+- `GET /api/admin/users/{id}/punish-logs`
 - `GET /api/admin/communities`
 - `POST /api/admin/communities`
+- `GET /api/admin/notifications/announcements`
+- `POST /api/admin/notifications/{id}/revoke`
+- `POST /api/admin/notifications/{id}/redispatch`
+- `GET /api/admin/notifications/trend?days=7|30`
+- `GET /api/admin/risk/anomalies`
+- `POST /api/admin/risk/anomalies/{id}/handle`
+- `GET /api/admin/risk/appeals`
+- `POST /api/admin/risk/appeals/{id}/handle`
+- `GET /api/admin/permissions/menus`
+- `POST /api/admin/permissions/menus/assign`
+- `GET /api/admin/permissions/logs`
+- `GET /api/admin/permissions/data`
+- `POST /api/admin/permissions/data/assign`
+- `GET /api/admin/permissions/operation-logs`
+- `GET /api/admin/permissions/user-behavior-logs`
+- `GET /api/admin/verifications`
+- `POST /api/admin/verifications/{id}/handle`
+- `GET /api/admin/communities/notices`
+- `POST /api/admin/communities/notices`
+- `POST /api/admin/communities/notices/{id}/revoke`
+- `GET /api/admin/events/signups`
+- `GET /api/admin/listings`
+- `POST /api/admin/listings/batch-handle`
+- `POST /api/admin/listings/batch-retry`
+- `POST /api/admin/listings/batch-retry/export`
+- `GET /api/admin/listings/stats/category`
+- `GET /api/admin/content/communities/engagement`
+- `GET /api/admin/content/categories`
+- `POST /api/admin/content/categories`
+- `POST /api/admin/content/categories/{id}/toggle`
+- `GET /api/admin/content/media/posts`
+- `POST /api/admin/content/media/posts/{id}/offline`
+- `GET /api/admin/notifications/push/tasks`
+- `POST /api/admin/notifications/push/tasks`
+- `POST /api/admin/notifications/push/tasks/{id}/send`
+- `GET /api/admin/notifications/push/records`
+- `GET /api/admin/notifications/templates`
+- `POST /api/admin/notifications/templates/save`
+- `GET /api/admin/analytics/growth`
+- `GET /api/admin/analytics/community`
+- `GET /api/admin/analytics/content`
+- `GET /api/admin/analytics/moderation`
+- `GET /api/admin/analytics/retention`
+- `GET /api/admin/analytics/ranking`
+- `GET /api/admin/settings/items`
+- `POST /api/admin/settings/items/save`
+- `GET /api/admin/settings/policies`
+- `POST /api/admin/settings/policies/save`
+- `POST /api/admin/settings/policies/{id}/activate`
 - `POST /api/files/upload`
+
+分析接口时间窗口参数（新增）：
+
+- 支持 `days`（如 `7`/`30`）
+- 也支持显式窗口：`startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`
+- 示例：
+  - `GET /api/admin/analytics/growth?days=30`
+  - `GET /api/admin/analytics/community?limit=20&startDate=2026-03-01&endDate=2026-03-31`
+  - `GET /api/admin/analytics/retention?startDate=2026-03-15&endDate=2026-03-31`
+
+启动报错排查（`risk_anomalies does not exist`）：
+
+1. 已新增兼容迁移：`blocksy-server/src/main/resources/db/migration/V14__compat_missing_admin_tables.sql`
+2. 重启后端让 Flyway 自动执行迁移
+3. 若历史库迁移记录异常，先备份，再执行：
+   - `DELETE FROM flyway_schema_history WHERE version='14';`（仅在重复失败时）
+   - 重启应用重新迁移
+
+帖子分页查询参数（本轮新增）：
+
+- `GET /api/posts?communityId=&keyword=&page=1&pageSize=10`
+- `GET /api/posts/mine?communityId=&keyword=&page=1&pageSize=10`
+- `GET /api/admin/posts?status=&communityId=&keyword=&page=1&pageSize=10`
 
 ### 4.3 后端联调快速验证（按 MVP 顺序）
 
@@ -163,7 +279,7 @@ curl -X POST "http://localhost:8080/api/posts" \
 4. 帖子列表与详情
 
 ```bash
-curl "http://localhost:8080/api/posts"
+curl "http://localhost:8080/api/posts?page=1&pageSize=10"
 curl "http://localhost:8080/api/posts/{id}"
 ```
 
@@ -190,7 +306,10 @@ V1.5 第一阶段已接入：
 - 我的帖子：`GET /api/posts/mine?communityId=`
 - 评论列表：`GET /api/comments?postId=`
 - 举报处理后台能力：`GET /api/admin/reports`、`POST /api/admin/reports/{id}/handle`
+- 举报处理备注与操作审计：`handler_note` 字段 + `report_handle_logs` 审计表 + `GET /api/admin/reports/{id}/logs`
 - 用户封禁后台能力：`POST /api/admin/users/{id}/ban`、`POST /api/admin/users/{id}/unban`
+- 用户处罚增强：封禁原因、封禁时长（小时）、到期自动解封、处罚日志 `GET /api/admin/users/{id}/punish-logs`
+- 举报批量处理增强：仅处理 `PENDING` 记录，返回成功/跳过/失败明细
 - 社区管理后台能力：`GET/POST /api/admin/communities`
 - 封禁用户 token 自动失效（JWT 过滤器按用户状态校验）
 
@@ -325,6 +444,7 @@ V1.5 用户端新增能力：
 - 首页按当前社区拉取帖子
 - 首页支持举报帖子
 - 发帖默认绑定当前所选社区
+- `home/community/event/my-post/listing/message` 已统一分页、下拉刷新、空状态 CTA 行为
 
 ### 5.2 管理后台（blocksy-admin）
 
@@ -340,8 +460,9 @@ npm run dev
 - 帖子管理页：`/posts`
 - 已接接口：
   - `POST /api/auth/login`
-  - `GET /api/posts`
-- 已预留操作：帖子“下架/删除”按钮（当前为占位提示，待接后台管理接口）
+  - `GET /api/admin/posts`
+  - `POST /api/admin/posts/{id}/review`
+- 已实现操作：帖子“下架/恢复”真实治理（筛选+分页+状态流转）
 
 V1.5 管理后台新增页面能力：
 
@@ -351,7 +472,11 @@ V1.5 管理后台新增页面能力：
 
 ## 7. V1.5 一键联调脚本（curl）
 
-已提供脚本：`scripts/v1_5_flow.sh`
+已提供脚本：
+
+- `scripts/v1_5_flow.sh`
+- `scripts/user_punish_flow.sh`
+- `scripts/regression_post_governance_flow.sh`
 
 执行：
 
@@ -370,6 +495,48 @@ cd /Users/workstation/os-code/Blocksy
 6. 后台处理举报
 7. 封禁验证（`BAN_TARGET_USER=true` 时）
 
+`scripts/user_punish_flow.sh` 会按顺序执行：
+
+1. 管理员登录
+2. 目标用户登录
+3. 管理员按“原因+时长”封禁目标用户
+4. 验证目标用户 token 被拦截
+5. 查询处罚日志
+6. 管理员解封
+7. 用户重新登录并验证恢复访问
+
+查看某条举报的处理审计日志：
+
+```bash
+curl "http://localhost:8080/api/admin/reports/<reportId>/logs" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+批量处理举报：
+
+```bash
+curl -X POST "http://localhost:8080/api/admin/reports/batch-handle" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reportIds":[1,2,3],"action":"RESOLVED","note":"批量处理","banTargetUser":false}'
+```
+
+封禁用户（支持原因+时长）：
+
+```bash
+curl -X POST "http://localhost:8080/api/admin/users/<userId>/ban" \
+  -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"恶意刷屏","durationHours":24}'
+```
+
+查看用户处罚日志：
+
+```bash
+curl "http://localhost:8080/api/admin/users/<userId>/punish-logs" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
 可选环境变量：
 
 ```bash
@@ -387,6 +554,19 @@ BAN_TARGET_USER=true
 ```bash
 BAN_TARGET_USER=false ./scripts/v1_5_flow.sh
 ```
+
+帖子治理分页回归：
+
+```bash
+cd /Users/workstation/os-code/Blocksy
+./scripts/regression_post_governance_flow.sh
+```
+
+CI Smoke（GitHub Actions）：
+
+- Workflow：`.github/workflows/smoke-post-governance.yml`
+- 自动触发：`main` 分支 push / PR（命中后端与脚本路径）
+- 手动触发：Actions -> `smoke-post-governance` -> Run workflow
 
 默认本地访问（Vite）：`http://localhost:5173/login`
 

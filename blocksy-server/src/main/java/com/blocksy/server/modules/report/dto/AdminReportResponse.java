@@ -19,6 +19,8 @@ public record AdminReportResponse(
         String processStatus,
         @Schema(description = "处理人 ID")
         Long handlerUserId,
+        @Schema(description = "处理备注")
+        String handlerNote,
         @Schema(description = "处理时间")
         LocalDateTime handledAt,
         @Schema(description = "创建时间")

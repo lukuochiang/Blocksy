@@ -15,9 +15,17 @@ import java.util.stream.Collectors;
 public class AdminGuard {
 
     private final Set<String> adminUsernames;
+    private final Set<String> templateManagerUsernames;
 
-    public AdminGuard(@Value("${blocksy.security.admin-usernames:demo}") String adminUsernames) {
+    public AdminGuard(
+            @Value("${blocksy.security.admin-usernames:demo}") String adminUsernames,
+            @Value("${blocksy.security.template-manager-usernames:demo}") String templateManagerUsernames
+    ) {
         this.adminUsernames = Arrays.stream(adminUsernames.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isEmpty())
+                .collect(Collectors.toSet());
+        this.templateManagerUsernames = Arrays.stream(templateManagerUsernames.split(","))
                 .map(String::trim)
                 .filter(item -> !item.isEmpty())
                 .collect(Collectors.toSet());
@@ -27,6 +35,14 @@ public class AdminGuard {
         AuthenticatedUser currentUser = SecurityUtils.getCurrentUserOrThrow();
         if (!adminUsernames.contains(currentUser.username())) {
             throw new BusinessException(ResponseCodeEnum.FORBIDDEN, "仅管理员可操作");
+        }
+        return currentUser;
+    }
+
+    public AuthenticatedUser requireTemplateManager() {
+        AuthenticatedUser currentUser = requireAdmin();
+        if (!templateManagerUsernames.contains(currentUser.username())) {
+            throw new BusinessException(ResponseCodeEnum.FORBIDDEN, "仅模板管理员可操作");
         }
         return currentUser;
     }

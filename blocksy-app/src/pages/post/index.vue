@@ -43,7 +43,7 @@
       <view class="section">
         <view class="title">帖子列表</view>
         <skeleton-list v-if="loadingPosts" :count="2" />
-        <view v-for="item in pagedPosts" :key="item.id" class="card">
+        <view v-for="item in posts" :key="item.id" class="card">
           <view class="content">{{ item.content }}</view>
           <scroll-view v-if="item.media?.length" class="media-scroll" scroll-x>
             <image v-for="media in item.media" :key="media.objectKey" :src="media.url" mode="aspectFill" class="media" />
@@ -67,10 +67,10 @@
           @cta="reloadPosts"
         />
         <list-pager
-          v-if="!loadingPosts && posts.length > pageSize"
+          v-if="!loadingPosts && total > pageSize"
           :page="page"
           :page-size="pageSize"
-          :total="posts.length"
+          :total="total"
           @prev="prevPage"
           @next="nextPage"
         />
@@ -86,14 +86,14 @@
       <view class="side-card">
         <view class="side-title">当前状态</view>
         <view class="side-line">待上传图片：{{ selectedFiles.filter((i) => !i.uploaded).length }}</view>
-        <view class="side-line">已加载帖子：{{ posts.length }}</view>
+        <view class="side-line">帖子总量：{{ total }}</view>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { createComment, createPost, getPostList, PostItem, PostMedia } from "../../api/post";
 import { uploadFile } from "../../api/file";
 import { useUserStore } from "../../store/user";
@@ -121,11 +121,8 @@ const posts = ref<PostItem[]>([]);
 const loadingPosts = ref(false);
 const commentDraft = reactive<Record<number, string>>({});
 const page = ref(1);
-const pageSize = 4;
-const pagedPosts = computed(() => {
-  const start = (page.value - 1) * pageSize;
-  return posts.value.slice(start, start + pageSize);
-});
+const pageSize = ref(4);
+const total = ref(0);
 
 function ensureLogin(): boolean {
   if (!userStore.token) {
@@ -234,12 +231,23 @@ async function submitComment(postId: number) {
 }
 
 async function reloadPosts() {
+  await loadPosts(1);
+}
+
+async function loadPosts(targetPage: number) {
   loadingPosts.value = true;
   try {
     await withMinDuration(async () => {
-      posts.value = await getPostList(userStore.currentCommunityId || undefined);
+      const response = await getPostList({
+        communityId: userStore.currentCommunityId || undefined,
+        page: targetPage,
+        pageSize: pageSize.value
+      });
+      posts.value = response.items || [];
+      total.value = response.total || 0;
+      page.value = response.page || targetPage;
+      pageSize.value = response.pageSize || pageSize.value;
     });
-    page.value = 1;
   } catch (error) {
     uni.showToast({ title: (error as Error).message || "加载失败", icon: "none" });
   } finally {
@@ -248,18 +256,18 @@ async function reloadPosts() {
 }
 
 function prevPage() {
-  if (page.value <= 1) {
+  if (page.value <= 1 || loadingPosts.value) {
     return;
   }
-  page.value -= 1;
+  void loadPosts(page.value - 1);
 }
 
 function nextPage() {
-  const totalPages = Math.ceil(posts.value.length / pageSize);
-  if (page.value >= totalPages) {
+  const totalPages = Math.max(1, Math.ceil(total.value / pageSize.value));
+  if (page.value >= totalPages || loadingPosts.value) {
     return;
   }
-  page.value += 1;
+  void loadPosts(page.value + 1);
 }
 
 onMounted(() => {
@@ -353,7 +361,7 @@ const { pullStatus, pullOffset, pullText } = useH5PullRefresh(async () => {
   border: 1px solid #d5e2f5;
   padding: 9px 10px;
   border-radius: 12px;
-  //background: var(--surface-solid);
+  /* background: var(--surface-solid); */
 }
 
 .action-btn.is-loading {

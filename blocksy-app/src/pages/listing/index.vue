@@ -24,7 +24,25 @@
           {{ item.name }}
         </button>
       </view>
+      <view class="filter-row">
+        <input v-model="keyword" class="filter-input" placeholder="搜索标题或内容" />
+        <input v-model="minPriceInput" class="filter-input mini" type="number" placeholder="最低价" />
+        <input v-model="maxPriceInput" class="filter-input mini" type="number" placeholder="最高价" />
+        <button class="ghost-btn" @click="reloadListings">筛选</button>
+      </view>
+      <view class="sort-row">
+        <button class="sort-btn" :class="{ active: sortBy === 'CREATED_AT' && sortOrder === 'DESC' }" @click="setSort('CREATED_AT', 'DESC')">
+          最新发布
+        </button>
+        <button class="sort-btn" :class="{ active: sortBy === 'PRICE' && sortOrder === 'ASC' }" @click="setSort('PRICE', 'ASC')">
+          价格升序
+        </button>
+        <button class="sort-btn" :class="{ active: sortBy === 'PRICE' && sortOrder === 'DESC' }" @click="setSort('PRICE', 'DESC')">
+          价格降序
+        </button>
+      </view>
 
+      <skeleton-list v-if="loading" :count="3" />
       <view class="cards">
         <view v-for="item in pagedListings" :key="item.id" class="card">
           <view class="card-head">
@@ -32,15 +50,23 @@
             <view class="price">{{ item.priceText }}</view>
           </view>
           <view class="card-content">{{ item.content }}</view>
-          <view class="card-meta">{{ item.community }} · {{ item.updatedAt }}</view>
+          <view class="card-meta">社区 #{{ item.communityId }} · {{ item.createdAt ? formatDateTime(item.createdAt) : "-" }}</view>
           <view class="card-actions">
             <button class="ghost-btn">联系TA</button>
-            <button class="ghost-btn">收藏</button>
+            <button class="ghost-btn" @click="goDetail(item.id)">详情</button>
           </view>
         </view>
       </view>
+      <empty-state
+        v-if="!loading && !filteredListings.length"
+        title="暂无分类信息"
+        description="先发布一条分类信息，方便邻里看到你的需求。"
+        cta-text="去发布"
+        cta-variant="primary"
+        @cta="goPost"
+      />
       <list-pager
-        v-if="filteredListings.length > pageSize"
+        v-if="!loading && filteredListings.length > pageSize"
         :page="page"
         :page-size="pageSize"
         :total="filteredListings.length"
@@ -62,9 +88,9 @@
       </view>
       <view class="side-card">
         <view class="side-title">热门分类</view>
-        <button class="mini-btn" @click="activeCategory = 'second_hand'">二手交易</button>
-        <button class="mini-btn" @click="activeCategory = 'help'">邻里求助</button>
-        <button class="mini-btn" @click="activeCategory = 'services'">本地服务</button>
+        <button class="mini-btn" @click="activeCategory = 'SECOND_HAND'">二手交易</button>
+        <button class="mini-btn" @click="activeCategory = 'HELP_WANTED'">邻里求助</button>
+        <button class="mini-btn" @click="activeCategory = 'LOST_FOUND'">失物招领</button>
       </view>
     </view>
   </view>
@@ -75,34 +101,39 @@
 import { computed, ref, watch } from "vue";
 import ListPager from "../../components/ListPager.vue";
 import { useH5PullRefresh } from "../../utils/pull-refresh";
+import SkeletonList from "../../components/SkeletonList.vue";
+import EmptyState from "../../components/EmptyState.vue";
+import { withMinDuration } from "../../utils/async";
+import { getListingList, type ListingCategory, type ListingItem } from "../../api/listing";
+import { useUserStore } from "../../store/user";
+import { formatDateTime } from "../../utils/datetime";
 
 const categories = [
-  { code: "all", name: "全部" },
-  { code: "second_hand", name: "二手交易" },
-  { code: "lost_found", name: "失物招领" },
-  { code: "pet_missing", name: "宠物走失" },
-  { code: "help", name: "邻里求助" },
-  { code: "ride_share", name: "拼车搭子" },
-  { code: "housing", name: "房屋租售" },
-  { code: "services", name: "本地服务" }
+  { code: "ALL", name: "全部" },
+  { code: "SECOND_HAND", name: "二手交易" },
+  { code: "LOST_FOUND", name: "失物招领" },
+  { code: "HELP_WANTED", name: "邻里求助" }
 ];
 
-const listings = [
-  { id: 1, category: "second_hand", title: "九成新儿童书桌", content: "可升降，带收纳，周末自提。", community: "滨江花园", priceText: "¥280", updatedAt: "今天 18:20" },
-  { id: 2, category: "lost_found", title: "招领：门禁卡一张", content: "小区南门附近拾到，描述核对后归还。", community: "Norvo 默认社区", priceText: "免费", updatedAt: "今天 16:05" },
-  { id: 3, category: "help", title: "求推荐靠谱搬家师傅", content: "本周六上午搬家，距离约 4km。", community: "锦绣家园", priceText: "求推荐", updatedAt: "今天 14:40" },
-  { id: 4, category: "services", title: "本地家电清洗服务", content: "空调、洗衣机上门清洗，可开收据。", community: "滨江花园", priceText: "¥99 起", updatedAt: "昨天 21:15" }
-];
+interface ListingCard extends ListingItem {
+  priceText: string;
+}
 
-const activeCategory = ref("all");
+const userStore = useUserStore();
+userStore.hydrate();
+const listings = ref<ListingCard[]>([]);
+const loading = ref(false);
+const activeCategory = ref<"ALL" | ListingCategory>("ALL");
+const keyword = ref("");
+const minPriceInput = ref("");
+const maxPriceInput = ref("");
+const sortBy = ref<"CREATED_AT" | "PRICE">("CREATED_AT");
+const sortOrder = ref<"ASC" | "DESC">("DESC");
 const page = ref(1);
 const pageSize = 4;
 
 const filteredListings = computed(() => {
-  if (activeCategory.value === "all") {
-    return listings;
-  }
-  return listings.filter((item) => item.category === activeCategory.value);
+  return listings.value;
 });
 
 const pagedListings = computed(() => {
@@ -111,7 +142,7 @@ const pagedListings = computed(() => {
 });
 
 watch(activeCategory, () => {
-  page.value = 1;
+  void reloadListings();
 });
 
 function prevPage() {
@@ -129,9 +160,53 @@ function nextPage() {
   page.value += 1;
 }
 
+function goPost() {
+  uni.reLaunch({ url: "/pages/post/index" });
+}
+
+function goDetail(id: number) {
+  uni.navigateTo({ url: `/pages/listing-detail/index?id=${id}` });
+}
+
+async function reloadListings() {
+  loading.value = true;
+  try {
+    await withMinDuration(async () => {
+      const minPrice = minPriceInput.value ? Number(minPriceInput.value) : undefined;
+      const maxPrice = maxPriceInput.value ? Number(maxPriceInput.value) : undefined;
+      const result = await getListingList({
+        communityId: userStore.currentCommunityId || undefined,
+        category: activeCategory.value,
+        keyword: keyword.value || undefined,
+        minPrice: Number.isFinite(minPrice as number) ? minPrice : undefined,
+        maxPrice: Number.isFinite(maxPrice as number) ? maxPrice : undefined,
+        sortBy: sortBy.value,
+        sortOrder: sortOrder.value
+      });
+      listings.value = result.map((item) => ({
+        ...item,
+        priceText: item.price == null ? "面议" : `¥${item.price}`
+      }));
+    });
+    page.value = 1;
+  } catch (error) {
+    uni.showToast({ title: (error as Error).message || "加载失败", icon: "none" });
+  } finally {
+    loading.value = false;
+  }
+}
+
+function setSort(nextSortBy: "CREATED_AT" | "PRICE", nextSortOrder: "ASC" | "DESC") {
+  sortBy.value = nextSortBy;
+  sortOrder.value = nextSortOrder;
+  void reloadListings();
+}
+
 const { pullStatus, pullOffset, pullText } = useH5PullRefresh(async () => {
-  page.value = 1;
+  await reloadListings();
 });
+
+reloadListings();
 </script>
 
 <style scoped>
@@ -180,6 +255,51 @@ const { pullStatus, pullOffset, pullText } = useH5PullRefresh(async () => {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.filter-input {
+  flex: 1;
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid #d5e2f5;
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.filter-input.mini {
+  flex: 0 0 100px;
+  min-width: 100px;
+}
+
+.sort-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.sort-btn {
+  border: 1px solid #d5e2f5;
+  border-radius: 999px;
+  background: #fff;
+  color: #5c6986;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.sort-btn.active {
+  background: linear-gradient(135deg, #e8f1ff 0%, #ebfbf7 100%);
+  color: var(--primary-dark);
+  border-color: #bed3f6;
+  font-weight: 700;
 }
 
 .tab-btn {

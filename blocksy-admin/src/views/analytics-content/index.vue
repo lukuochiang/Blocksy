@@ -1,0 +1,51 @@
+<template>
+  <app-section>
+    <div class="head">
+      <h3 class="section-title">内容活跃分析</h3>
+      <el-radio-group v-model="days" size="small" @change="loadRows">
+        <el-radio-button :label="7">近7天</el-radio-button>
+        <el-radio-button :label="30">近30天</el-radio-button>
+      </el-radio-group>
+    </div>
+    <el-table v-loading="loading" :data="rows" border>
+      <el-table-column prop="day" label="日期" width="160" />
+      <el-table-column prop="postCount" label="帖子数" />
+      <el-table-column prop="commentCount" label="评论数" />
+    </el-table>
+  </app-section>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import { ElMessage } from "element-plus";
+import AppSection from "../../components/AppSection.vue";
+import { fetchContentTrend, type ContentTrendPoint } from "../../api/admin-analytics";
+
+const days = ref<7 | 30>(7);
+const loading = ref(false);
+const rows = ref<ContentTrendPoint[]>([]);
+
+async function loadRows() {
+  loading.value = true;
+  try {
+    rows.value = await fetchContentTrend(days.value);
+  } catch (error) {
+    ElMessage.error((error as Error).message || "加载失败");
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(() => {
+  void loadRows();
+});
+</script>
+
+<style scoped>
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+</style>

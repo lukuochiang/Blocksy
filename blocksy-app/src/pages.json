@@ -31,15 +31,39 @@
       }
     },
     {
+      "path": "pages/my-listing/index",
+      "style": {
+        "navigationBarTitleText": "我的分类信息"
+      }
+    },
+    {
+      "path": "pages/my-event-signups/index",
+      "style": {
+        "navigationBarTitleText": "我的活动报名"
+      }
+    },
+    {
       "path": "pages/listing/index",
       "style": {
         "navigationBarTitleText": "分类信息"
       }
     },
     {
+      "path": "pages/listing-detail/index",
+      "style": {
+        "navigationBarTitleText": "分类信息详情"
+      }
+    },
+    {
       "path": "pages/event/index",
       "style": {
         "navigationBarTitleText": "社区活动"
+      }
+    },
+    {
+      "path": "pages/event-detail/index",
+      "style": {
+        "navigationBarTitleText": "活动详情"
       }
     },
     {

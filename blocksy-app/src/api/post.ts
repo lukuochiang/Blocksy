@@ -29,7 +29,21 @@ export interface CreateCommentParams {
   replyToCommentId?: number;
 }
 
-function buildQuery(params: Record<string, number | undefined>): string {
+export interface PostPageData {
+  page: number;
+  pageSize: number;
+  total: number;
+  items: PostItem[];
+}
+
+export interface PostPageQuery {
+  communityId?: number;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+function buildQuery(params: Record<string, number | string | undefined>): string {
   const query = Object.entries(params)
     .filter(([, value]) => value !== undefined && value !== null)
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
@@ -37,8 +51,8 @@ function buildQuery(params: Record<string, number | undefined>): string {
   return query ? `?${query}` : "";
 }
 
-export function getPostList(communityId?: number): Promise<PostItem[]> {
-  return request<PostItem[]>(`/posts${buildQuery({ communityId })}`);
+export function getPostList(query: PostPageQuery = {}): Promise<PostPageData> {
+  return request<PostPageData>(`/posts${buildQuery(query)}`);
 }
 
 export function getPostDetail(postId: number): Promise<PostItem> {
@@ -61,6 +75,6 @@ export function createComment(payload: CreateCommentParams): Promise<void> {
   });
 }
 
-export function getMyPosts(communityId?: number): Promise<PostItem[]> {
-  return request<PostItem[]>(`/posts/mine${buildQuery({ communityId })}`, { auth: true });
+export function getMyPosts(query: PostPageQuery = {}): Promise<PostPageData> {
+  return request<PostPageData>(`/posts/mine${buildQuery(query)}`, { auth: true });
 }

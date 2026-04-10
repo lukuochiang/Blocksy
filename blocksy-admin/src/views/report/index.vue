@@ -9,40 +9,87 @@
         <el-option label="已驳回" value="REJECTED" />
       </el-select>
       <el-button type="primary" @click="loadReports">刷新</el-button>
+      <el-button :disabled="!selectedIds.length" type="success" @click="batchResolve(false)">批量通过</el-button>
+      <el-button :disabled="!selectedIds.length" type="warning" @click="batchResolve(true)">批量通过并封禁</el-button>
+      <el-button :disabled="!selectedIds.length" type="danger" @click="batchReject">批量驳回</el-button>
     </div>
-    <el-table v-loading="loading" :data="reports" border class="page-table">
+    <el-table
+      v-loading="loading"
+      :data="reports"
+      border
+      class="page-table"
+      @selection-change="onSelectionChange"
+    >
+      <el-table-column type="selection" width="50" />
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column prop="reporterUserId" label="举报人" width="110" />
       <el-table-column prop="targetType" label="目标类型" width="120" />
       <el-table-column prop="targetId" label="目标ID" width="110" />
       <el-table-column prop="reason" label="原因" min-width="320" />
       <el-table-column prop="processStatus" label="状态" width="100" />
+      <el-table-column prop="handlerNote" label="处理备注" min-width="220" />
       <el-table-column label="创建时间" min-width="220">
         <template #default="{ row }">
           {{ formatDateTime(row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="260">
+      <el-table-column label="操作" width="320">
         <template #default="{ row }">
           <el-button size="small" type="success" @click="resolve(row.id, false)">通过</el-button>
           <el-button size="small" type="warning" @click="resolve(row.id, true)">通过并封禁</el-button>
           <el-button size="small" type="danger" @click="reject(row.id)">驳回</el-button>
+          <el-button size="small" @click="showLogs(row.id)">日志</el-button>
         </template>
       </el-table-column>
     </el-table>
+    <el-dialog v-model="logDialogVisible" title="处理日志" width="760px">
+      <el-table v-loading="logLoading" :data="logRows" border>
+        <el-table-column prop="id" label="日志ID" width="90" />
+        <el-table-column prop="operatorUserId" label="操作人" width="100" />
+        <el-table-column prop="action" label="动作" width="110" />
+        <el-table-column prop="banTargetUser" label="封禁" width="90">
+          <template #default="{ row }">
+            {{ row.banTargetUser ? "是" : "否" }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="note" label="备注" min-width="220" />
+        <el-table-column label="时间" min-width="180">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createdAt) }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </app-section>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import AppSection from "../../components/AppSection.vue";
-import { fetchReports, handleReport, ReportItem } from "../../api/report";
+import {
+  batchHandleReport,
+  fetchReportHandleLogs,
+  fetchReports,
+  handleReport,
+  ReportHandleLogItem,
+  ReportItem
+} from "../../api/report";
 import { formatDateTime } from "../../utils/datetime";
 
 const loading = ref(false);
 const statusFilter = ref("");
 const reports = ref<ReportItem[]>([]);
+const selectedIds = ref<number[]>([]);
+const selectedRows = ref<ReportItem[]>([]);
+const logDialogVisible = ref(false);
+const logLoading = ref(false);
+const logRows = ref<ReportHandleLogItem[]>([]);
+
+function onSelectionChange(rows: ReportItem[]) {
+  selectedRows.value = rows;
+  selectedIds.value = rows.map((row) => row.id);
+}
 
 async function loadReports() {
   loading.value = true;
@@ -72,6 +119,96 @@ async function reject(reportId: number) {
     await loadReports();
   } catch (error) {
     ElMessage.error((error as Error).message || "处理失败");
+  }
+}
+
+async function batchResolve(banTargetUser: boolean) {
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先选择举报记录");
+    return;
+  }
+  const pendingRows = selectedRows.value.filter((row) => row.processStatus === "PENDING");
+  if (!pendingRows.length) {
+    ElMessage.warning("所选举报均已处理，请重新选择 PENDING 记录");
+    return;
+  }
+  try {
+    const promptResult = await ElMessageBox.prompt("请输入处理备注（选填）", "批量通过", {
+      confirmButtonText: "确认",
+      cancelButtonText: "取消",
+      inputPlaceholder: "如：批量处理违规内容"
+    }).catch(() => null);
+    if (promptResult === null) {
+      return;
+    }
+    const result = await batchHandleReport(
+      pendingRows.map((row) => row.id),
+      "RESOLVED",
+      banTargetUser,
+      promptResult.value || undefined
+    );
+    await ElMessageBox.alert(
+      `总数：${result.totalCount}\n成功：${result.successCount}\n跳过：${result.skippedIds.length}\n失败：${result.failedItems.length}`,
+      "批量处理结果",
+      { confirmButtonText: "知道了" }
+    );
+    ElMessage.success(`批量处理完成，成功 ${result.successCount} 条`);
+    selectedIds.value = [];
+    selectedRows.value = [];
+    await loadReports();
+  } catch (error) {
+    ElMessage.error((error as Error).message || "批量处理失败");
+  }
+}
+
+async function batchReject() {
+  if (!selectedRows.value.length) {
+    ElMessage.warning("请先选择举报记录");
+    return;
+  }
+  const pendingRows = selectedRows.value.filter((row) => row.processStatus === "PENDING");
+  if (!pendingRows.length) {
+    ElMessage.warning("所选举报均已处理，请重新选择 PENDING 记录");
+    return;
+  }
+  try {
+    const promptResult = await ElMessageBox.prompt("请输入驳回备注（选填）", "批量驳回", {
+      confirmButtonText: "确认",
+      cancelButtonText: "取消",
+      inputPlaceholder: "如：证据不足"
+    }).catch(() => null);
+    if (promptResult === null) {
+      return;
+    }
+    const result = await batchHandleReport(
+      pendingRows.map((row) => row.id),
+      "REJECTED",
+      false,
+      promptResult.value || undefined
+    );
+    await ElMessageBox.alert(
+      `总数：${result.totalCount}\n成功：${result.successCount}\n跳过：${result.skippedIds.length}\n失败：${result.failedItems.length}`,
+      "批量处理结果",
+      { confirmButtonText: "知道了" }
+    );
+    ElMessage.success(`批量驳回完成，成功 ${result.successCount} 条`);
+    selectedIds.value = [];
+    selectedRows.value = [];
+    await loadReports();
+  } catch (error) {
+    ElMessage.error((error as Error).message || "批量驳回失败");
+  }
+}
+
+async function showLogs(reportId: number) {
+  logDialogVisible.value = true;
+  logLoading.value = true;
+  try {
+    logRows.value = await fetchReportHandleLogs(reportId);
+  } catch (error) {
+    ElMessage.error((error as Error).message || "加载处理日志失败");
+  } finally {
+    logLoading.value = false;
   }
 }
 

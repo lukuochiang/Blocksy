@@ -1,6 +1,7 @@
 package com.blocksy.server.modules.post.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.blocksy.server.common.api.PageResponse;
 import com.blocksy.server.common.exception.BusinessException;
 import com.blocksy.server.modules.post.dto.AdminPostResponse;
 import com.blocksy.server.modules.post.dto.PostMediaItem;
@@ -33,28 +34,52 @@ public class PostServiceImpl implements PostService {
     }
 
     @Override
-    public List<PostResponse> list(Long communityId) {
-        LambdaQueryWrapper<PostEntity> queryWrapper = new LambdaQueryWrapper<PostEntity>()
-                .eq(PostEntity::getStatus, 1)
-                .orderByDesc(PostEntity::getCreatedAt)
-                .last("LIMIT 30");
-        if (communityId != null) {
-            queryWrapper.eq(PostEntity::getCommunityId, communityId);
+    public PageResponse<PostResponse> list(Long communityId, String keyword, Integer page, Integer pageSize) {
+        int resolvedPage = resolvePage(page);
+        int resolvedPageSize = resolvePageSize(pageSize, 50);
+        long total = postMapper.selectCount(buildPostQuery(communityId, keyword, 1));
+        if (total == 0) {
+            return new PageResponse<>(resolvedPage, resolvedPageSize, 0L, Collections.emptyList());
         }
-        return buildPostResponses(postMapper.selectList(queryWrapper));
+        int offset = (resolvedPage - 1) * resolvedPageSize;
+        LambdaQueryWrapper<PostEntity> pageWrapper = buildPostQuery(communityId, keyword, 1)
+                .orderByDesc(PostEntity::getCreatedAt)
+                .last("LIMIT " + resolvedPageSize + " OFFSET " + offset);
+        List<PostResponse> items = buildPostResponses(postMapper.selectList(pageWrapper));
+        return new PageResponse<>(resolvedPage, resolvedPageSize, total, items);
     }
 
     @Override
-    public List<PostResponse> listMine(Long userId, Long communityId) {
-        LambdaQueryWrapper<PostEntity> queryWrapper = new LambdaQueryWrapper<PostEntity>()
+    public PageResponse<PostResponse> listMine(Long userId, Long communityId, String keyword, Integer page, Integer pageSize) {
+        int resolvedPage = resolvePage(page);
+        int resolvedPageSize = resolvePageSize(pageSize, 50);
+        LambdaQueryWrapper<PostEntity> baseQuery = new LambdaQueryWrapper<PostEntity>()
+                .eq(PostEntity::getUserId, userId)
+                .eq(PostEntity::getStatus, 1);
+        if (communityId != null) {
+            baseQuery.eq(PostEntity::getCommunityId, communityId);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            baseQuery.like(PostEntity::getContent, keyword.trim());
+        }
+        long total = postMapper.selectCount(baseQuery);
+        if (total == 0) {
+            return new PageResponse<>(resolvedPage, resolvedPageSize, 0L, Collections.emptyList());
+        }
+        int offset = (resolvedPage - 1) * resolvedPageSize;
+        LambdaQueryWrapper<PostEntity> pageQuery = new LambdaQueryWrapper<PostEntity>()
                 .eq(PostEntity::getUserId, userId)
                 .eq(PostEntity::getStatus, 1)
                 .orderByDesc(PostEntity::getCreatedAt)
-                .last("LIMIT 30");
+                .last("LIMIT " + resolvedPageSize + " OFFSET " + offset);
         if (communityId != null) {
-            queryWrapper.eq(PostEntity::getCommunityId, communityId);
+            pageQuery.eq(PostEntity::getCommunityId, communityId);
         }
-        return buildPostResponses(postMapper.selectList(queryWrapper));
+        if (keyword != null && !keyword.isBlank()) {
+            pageQuery.like(PostEntity::getContent, keyword.trim());
+        }
+        List<PostResponse> items = buildPostResponses(postMapper.selectList(pageQuery));
+        return new PageResponse<>(resolvedPage, resolvedPageSize, total, items);
     }
 
     @Override
@@ -117,22 +142,40 @@ public class PostServiceImpl implements PostService {
     }
 
     @Override
-    public List<AdminPostResponse> listForAdmin(Integer status, Long communityId, String keyword) {
-        LambdaQueryWrapper<PostEntity> queryWrapper = new LambdaQueryWrapper<PostEntity>()
-                .orderByDesc(PostEntity::getCreatedAt)
-                .last("LIMIT 200");
+    public PageResponse<AdminPostResponse> listForAdmin(Integer status, Long communityId, String keyword, Integer page, Integer pageSize) {
+        int resolvedPage = resolvePage(page);
+        int resolvedPageSize = resolvePageSize(pageSize, 100);
+        LambdaQueryWrapper<PostEntity> countQuery = new LambdaQueryWrapper<PostEntity>();
         if (status != null) {
-            queryWrapper.eq(PostEntity::getStatus, status);
+            countQuery.eq(PostEntity::getStatus, status);
         }
         if (communityId != null) {
-            queryWrapper.eq(PostEntity::getCommunityId, communityId);
+            countQuery.eq(PostEntity::getCommunityId, communityId);
         }
         if (keyword != null && !keyword.isBlank()) {
-            queryWrapper.like(PostEntity::getContent, keyword.trim());
+            countQuery.like(PostEntity::getContent, keyword.trim());
         }
-        return postMapper.selectList(queryWrapper).stream()
+        long total = postMapper.selectCount(countQuery);
+        if (total == 0) {
+            return new PageResponse<>(resolvedPage, resolvedPageSize, 0L, Collections.emptyList());
+        }
+        int offset = (resolvedPage - 1) * resolvedPageSize;
+        LambdaQueryWrapper<PostEntity> pageQuery = new LambdaQueryWrapper<PostEntity>()
+                .orderByDesc(PostEntity::getCreatedAt)
+                .last("LIMIT " + resolvedPageSize + " OFFSET " + offset);
+        if (status != null) {
+            pageQuery.eq(PostEntity::getStatus, status);
+        }
+        if (communityId != null) {
+            pageQuery.eq(PostEntity::getCommunityId, communityId);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            pageQuery.like(PostEntity::getContent, keyword.trim());
+        }
+        List<AdminPostResponse> items = postMapper.selectList(pageQuery).stream()
                 .map(this::toAdminResponse)
                 .toList();
+        return new PageResponse<>(resolvedPage, resolvedPageSize, total, items);
     }
 
     @Override
@@ -190,5 +233,28 @@ public class PostServiceImpl implements PostService {
                 post.getCreatedAt(),
                 post.getUpdatedAt()
         );
+    }
+
+    private LambdaQueryWrapper<PostEntity> buildPostQuery(Long communityId, String keyword, Integer status) {
+        LambdaQueryWrapper<PostEntity> query = new LambdaQueryWrapper<PostEntity>()
+                .eq(PostEntity::getStatus, status);
+        if (communityId != null) {
+            query.eq(PostEntity::getCommunityId, communityId);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            query.like(PostEntity::getContent, keyword.trim());
+        }
+        return query;
+    }
+
+    private int resolvePage(Integer page) {
+        return page == null || page < 1 ? 1 : page;
+    }
+
+    private int resolvePageSize(Integer pageSize, int maxSize) {
+        if (pageSize == null || pageSize < 1) {
+            return 10;
+        }
+        return Math.min(pageSize, maxSize);
     }
 }

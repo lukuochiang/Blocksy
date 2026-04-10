@@ -36,6 +36,36 @@
       </el-card>
     </div>
 
+    <div class="grid">
+      <el-card shadow="never" class="panel">
+        <template #header>
+          <div class="panel-title">通知触达统计</div>
+        </template>
+        <el-table :data="notificationTypeStats" stripe>
+          <el-table-column prop="type" label="类型" width="160" />
+          <el-table-column prop="totalCount" label="总量" width="100" />
+          <el-table-column prop="readCount" label="已读" width="100" />
+          <el-table-column prop="unreadCount" label="未读" width="100" />
+        </el-table>
+      </el-card>
+      <el-card shadow="never" class="panel">
+        <template #header>
+          <div class="panel-title">系统公告发布</div>
+        </template>
+        <el-form :model="announcementForm" label-width="70px">
+          <el-form-item label="标题">
+            <el-input v-model="announcementForm.title" maxlength="120" show-word-limit />
+          </el-form-item>
+          <el-form-item label="内容">
+            <el-input v-model="announcementForm.content" type="textarea" :rows="4" maxlength="500" show-word-limit />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="publishing" @click="publishAnnouncement">发布并下发通知</el-button>
+          </el-form-item>
+        </el-form>
+      </el-card>
+    </div>
+
     <el-card shadow="never" class="panel danger-panel">
       <template #header>
         <div class="panel-title">风险预警</div>
@@ -53,16 +83,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
+import { ElMessage } from "element-plus";
 import AppSection from "../../components/AppSection.vue";
 import { fetchPosts } from "../../api/post";
 import { fetchUsers } from "../../api/user";
 import { fetchReports } from "../../api/report";
+import { fetchGovernanceStats, fetchNotificationStats, publishSystemAnnouncement } from "../../api/notification";
 
 const users = ref(0);
 const posts = ref(0);
 const comments = ref(0);
 const reports = ref(0);
+const notificationStats = ref<{ totalCount: number; unreadCount: number; readRate: number; typeStats: Array<{ type: string; totalCount: number; readCount: number; unreadCount: number }> }>({
+  totalCount: 0,
+  unreadCount: 0,
+  readRate: 0,
+  typeStats: []
+});
+const governanceStats = ref<{ pendingReports: number; handledReportsToday: number; avgHandleHours7d: number; repeatPunishedUsers: number }>({
+  pendingReports: 0,
+  handledReportsToday: 0,
+  avgHandleHours7d: 0,
+  repeatPunishedUsers: 0
+});
+const publishing = ref(false);
+const announcementForm = reactive({ title: "", content: "" });
+
+const notificationTypeStats = computed(() => notificationStats.value.typeStats || []);
 
 const metricCards = computed(() => [
   { label: "今日新增用户", value: users.value, trend: "较昨日 +8%" },
@@ -70,13 +118,14 @@ const metricCards = computed(() => [
   { label: "今日发帖数", value: posts.value, trend: "较昨日 +12%" },
   { label: "今日评论数", value: comments.value, trend: "较昨日 +7%" },
   { label: "今日举报数", value: reports.value, trend: "较昨日 -3%" },
-  { label: "待审核内容", value: Math.max(reports.value, 3), trend: "请优先处理 >24h 工单" }
+  { label: "待处理举报", value: governanceStats.value.pendingReports, trend: "优先处理超时工单" },
+  { label: "通知未读总量", value: notificationStats.value.unreadCount, trend: `通知已读率 ${(notificationStats.value.readRate * 100).toFixed(1)}%` }
 ]);
 
 const pendingItems = computed(() => [
   { type: "帖子审核", count: Math.max(Math.floor(posts.value / 2), 2), sla: "平均待审 18 分钟" },
   { type: "评论审核", count: Math.max(Math.floor(comments.value / 3), 1), sla: "平均待审 12 分钟" },
-  { type: "举报工单", count: reports.value, sla: "平均待处理 31 分钟" }
+  { type: "举报工单", count: governanceStats.value.pendingReports, sla: `近7天平均处理 ${governanceStats.value.avgHandleHours7d.toFixed(2)} 小时` }
 ]);
 
 const communityRanking = computed(() => [
@@ -93,16 +142,48 @@ const riskAlerts = computed(() => [
 
 async function loadData() {
   try {
-    const [userRows, postRows, reportRows] = await Promise.all([fetchUsers(), fetchPosts(), fetchReports()]);
+    const [userRows, postRows, reportRows, notifRows, govRows] = await Promise.all([
+      fetchUsers(),
+      fetchPosts(),
+      fetchReports(),
+      fetchNotificationStats(),
+      fetchGovernanceStats()
+    ]);
     users.value = userRows.length;
     posts.value = postRows.length;
     comments.value = postRows.reduce((sum, item) => sum + (item.commentCount || 0), 0);
     reports.value = reportRows.length;
+    notificationStats.value = notifRows;
+    governanceStats.value = govRows;
   } catch {
     users.value = 0;
     posts.value = 0;
     comments.value = 0;
     reports.value = 0;
+    notificationStats.value = { totalCount: 0, unreadCount: 0, readRate: 0, typeStats: [] };
+    governanceStats.value = { pendingReports: 0, handledReportsToday: 0, avgHandleHours7d: 0, repeatPunishedUsers: 0 };
+  }
+}
+
+async function publishAnnouncement() {
+  if (!announcementForm.title.trim() || !announcementForm.content.trim()) {
+    ElMessage.warning("标题和内容不能为空");
+    return;
+  }
+  publishing.value = true;
+  try {
+    const count = await publishSystemAnnouncement({
+      title: announcementForm.title.trim(),
+      content: announcementForm.content.trim()
+    });
+    ElMessage.success(`公告已发布，已下发 ${count} 条通知`);
+    announcementForm.title = "";
+    announcementForm.content = "";
+    await loadData();
+  } catch (error) {
+    ElMessage.error((error as Error).message || "发布失败");
+  } finally {
+    publishing.value = false;
   }
 }
 

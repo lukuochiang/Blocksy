@@ -28,6 +28,8 @@ public record EventResponse(
         @Schema(description = "报名上限", example = "50")
         Integer signupLimit,
         @Schema(description = "当前报名人数", example = "10")
-        Integer signupCount
+        Integer signupCount,
+        @Schema(description = "状态 1=正常 0=下架", example = "1")
+        Integer status
 ) {
 }

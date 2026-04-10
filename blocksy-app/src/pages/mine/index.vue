@@ -15,6 +15,8 @@
       <view class="actions-grid">
         <button @click="refreshMe">刷新用户信息</button>
         <button @click="goMyPosts">我的帖子</button>
+        <button @click="goMyListings">我的分类信息</button>
+        <button @click="goMyEventSignups">我的活动报名</button>
         <button @click="goCommunity">切换社区</button>
         <button v-if="userStore.isLoggedIn" type="warn" @click="logout">退出登录</button>
         <button v-else @click="goLogin">去登录</button>
@@ -30,6 +32,8 @@
       <view class="side-card">
         <view class="side-title">快捷入口</view>
         <button class="side-btn" @click="goMyPosts">我的动态</button>
+        <button class="side-btn" @click="goMyListings">我的分类信息</button>
+        <button class="side-btn" @click="goMyEventSignups">我的活动报名</button>
         <button class="side-btn" @click="goCommunity">社区选择</button>
       </view>
     </view>
@@ -62,6 +66,14 @@ function goLogin() {
 
 function goMyPosts() {
   uni.navigateTo({ url: "/pages/my-post/index" });
+}
+
+function goMyListings() {
+  uni.navigateTo({ url: "/pages/my-listing/index" });
+}
+
+function goMyEventSignups() {
+  uni.navigateTo({ url: "/pages/my-event-signups/index" });
 }
 
 function goCommunity() {

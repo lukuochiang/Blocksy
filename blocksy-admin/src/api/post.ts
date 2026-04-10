@@ -23,10 +23,19 @@ interface ApiResponse<T> {
   data: T;
 }
 
+interface PageData<T> {
+  page: number;
+  pageSize: number;
+  total: number;
+  items: T[];
+}
+
 export async function fetchPosts(): Promise<PostItem[]> {
-  const response = await http.get<ApiResponse<PostItem[]>>("/posts");
+  const response = await http.get<ApiResponse<PageData<PostItem>>>("/posts", {
+    params: { page: 1, pageSize: 200 }
+  });
   if (response.data.code !== 0) {
     throw new Error(response.data.message || "获取帖子失败");
   }
-  return response.data.data || [];
+  return response.data.data?.items || [];
 }

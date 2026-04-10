@@ -24,6 +24,8 @@ public class ReportEntity {
     private String processStatus;
     @TableField("handler_user_id")
     private Long handlerUserId;
+    @TableField("handler_note")
+    private String handlerNote;
     @TableField("handled_at")
     private LocalDateTime handledAt;
     private Integer status;
@@ -48,6 +50,8 @@ public class ReportEntity {
     public void setProcessStatus(String processStatus) { this.processStatus = processStatus; }
     public Long getHandlerUserId() { return handlerUserId; }
     public void setHandlerUserId(Long handlerUserId) { this.handlerUserId = handlerUserId; }
+    public String getHandlerNote() { return handlerNote; }
+    public void setHandlerNote(String handlerNote) { this.handlerNote = handlerNote; }
     public LocalDateTime getHandledAt() { return handledAt; }
     public void setHandledAt(LocalDateTime handledAt) { this.handledAt = handledAt; }
     public Integer getStatus() { return status; }

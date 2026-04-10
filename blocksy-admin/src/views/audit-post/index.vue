@@ -42,6 +42,18 @@
         </template>
       </el-table-column>
     </el-table>
+    <div class="pager-wrap">
+      <el-pagination
+        background
+        layout="total, prev, pager, next, sizes"
+        :total="total"
+        :current-page="query.page"
+        :page-size="query.pageSize"
+        :page-sizes="[10, 20, 50]"
+        @current-change="onPageChange"
+        @size-change="onPageSizeChange"
+      />
+    </div>
   </app-section>
 </template>
 
@@ -54,29 +66,49 @@ import { formatDateTime } from "../../utils/datetime";
 
 const loading = ref(false);
 const rows = ref<AdminPostItem[]>([]);
+const total = ref(0);
 const query = reactive<{
   status?: number;
   communityId?: number;
   keyword?: string;
+  page: number;
+  pageSize: number;
 }>({
   status: undefined,
   communityId: undefined,
-  keyword: ""
+  keyword: "",
+  page: 1,
+  pageSize: 10
 });
 
 async function loadRows() {
   loading.value = true;
   try {
-    rows.value = await fetchAdminPosts({
+    const response = await fetchAdminPosts({
       status: query.status,
       communityId: query.communityId || undefined,
-      keyword: query.keyword?.trim() || undefined
+      keyword: query.keyword?.trim() || undefined,
+      page: query.page,
+      pageSize: query.pageSize
     });
+    rows.value = response.items || [];
+    total.value = response.total || 0;
   } catch (error) {
     ElMessage.error((error as Error).message || "加载帖子审核列表失败");
   } finally {
     loading.value = false;
   }
+}
+
+function onPageChange(page: number) {
+  query.page = page;
+  void loadRows();
+}
+
+function onPageSizeChange(size: number) {
+  query.pageSize = size;
+  query.page = 1;
+  void loadRows();
 }
 
 async function review(postId: number, action: "APPROVE" | "REJECT") {
@@ -101,5 +133,11 @@ onMounted(() => {
 
 .page-table {
   width: 100%;
+}
+
+.pager-wrap {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

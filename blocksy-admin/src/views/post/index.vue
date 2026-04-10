@@ -1,12 +1,28 @@
 <template>
   <app-section>
     <h3 class="section-title">帖子管理</h3>
-    <div class="toolbar">
-      <el-button type="primary" @click="loadPosts">刷新</el-button>
-    </div>
-    <el-table v-loading="loading" :data="posts" border>
+    <el-form inline :model="query" class="toolbar">
+      <el-form-item label="状态">
+        <el-select v-model="query.status" placeholder="全部" clearable style="width: 140px">
+          <el-option label="正常" :value="1" />
+          <el-option label="下架" :value="0" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="社区ID">
+        <el-input v-model.number="query.communityId" placeholder="例如 1" clearable />
+      </el-form-item>
+      <el-form-item label="关键词">
+        <el-input v-model="query.keyword" placeholder="帖子内容关键词" clearable />
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" @click="onSearch">查询</el-button>
+        <el-button @click="loadPosts">刷新</el-button>
+      </el-form-item>
+    </el-form>
+
+    <el-table v-loading="loading" :data="posts" border class="page-table">
       <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="authorId" label="作者ID" width="100" />
+      <el-table-column prop="userId" label="作者ID" width="100" />
       <el-table-column prop="communityId" label="社区ID" width="100" />
       <el-table-column label="内容" min-width="280">
         <template #default="{ row }">
@@ -31,28 +47,63 @@
       </el-table-column>
       <el-table-column label="操作" width="180">
         <template #default="{ row }">
-          <el-button size="small" @click="mockOffShelf(row.id)">下架</el-button>
-          <el-button size="small" type="danger" @click="mockDelete(row.id)">删除</el-button>
+          <el-button size="small" type="success" :disabled="row.status === 1" @click="review(row.id, 'APPROVE')">恢复</el-button>
+          <el-button size="small" type="danger" :disabled="row.status === 0" @click="review(row.id, 'REJECT')">下架</el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pager-wrap">
+      <el-pagination
+        background
+        layout="total, prev, pager, next, sizes"
+        :total="total"
+        :current-page="query.page"
+        :page-size="query.pageSize"
+        :page-sizes="[10, 20, 50]"
+        @current-change="onPageChange"
+        @size-change="onPageSizeChange"
+      />
+    </div>
   </app-section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import AppSection from "../../components/AppSection.vue";
-import { fetchPosts, PostItem } from "../../api/post";
+import { fetchAdminPosts, reviewAdminPost, type AdminPostItem } from "../../api/admin-post";
 import { formatDateTime } from "../../utils/datetime";
 
-const posts = ref<PostItem[]>([]);
+const posts = ref<AdminPostItem[]>([]);
 const loading = ref(false);
+const total = ref(0);
+const query = reactive<{
+  status?: number;
+  communityId?: number;
+  keyword?: string;
+  page: number;
+  pageSize: number;
+}>({
+  status: undefined,
+  communityId: undefined,
+  keyword: "",
+  page: 1,
+  pageSize: 10
+});
 
 async function loadPosts() {
   loading.value = true;
   try {
-    posts.value = await fetchPosts();
+    const response = await fetchAdminPosts({
+      status: query.status,
+      communityId: query.communityId || undefined,
+      keyword: query.keyword?.trim() || undefined,
+      page: query.page,
+      pageSize: query.pageSize
+    });
+    posts.value = response.items || [];
+    total.value = response.total || 0;
   } catch (error) {
     ElMessage.error((error as Error).message || "加载帖子失败");
   } finally {
@@ -60,16 +111,34 @@ async function loadPosts() {
   }
 }
 
-function mockOffShelf(postId: number) {
-  ElMessage.info(`预留能力：下架帖子 #${postId}`);
+function onSearch() {
+  query.page = 1;
+  void loadPosts();
 }
 
-function mockDelete(postId: number) {
-  ElMessage.info(`预留能力：删除帖子 #${postId}`);
+function onPageChange(page: number) {
+  query.page = page;
+  void loadPosts();
+}
+
+function onPageSizeChange(size: number) {
+  query.pageSize = size;
+  query.page = 1;
+  void loadPosts();
+}
+
+async function review(postId: number, action: "APPROVE" | "REJECT") {
+  try {
+    await reviewAdminPost(postId, action);
+    ElMessage.success(action === "APPROVE" ? "已恢复" : "已下架");
+    await loadPosts();
+  } catch (error) {
+    ElMessage.error((error as Error).message || "操作失败");
+  }
 }
 
 onMounted(() => {
-  loadPosts();
+  void loadPosts();
 });
 </script>
 
@@ -80,6 +149,9 @@ onMounted(() => {
 
 .toolbar {
   margin-bottom: 12px;
+}
+.page-table {
+  width: 100%;
 }
 
 .content {
@@ -97,5 +169,11 @@ onMounted(() => {
   width: 56px;
   height: 56px;
   border-radius: 4px;
+}
+
+.pager-wrap {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

@@ -8,6 +8,7 @@ import com.blocksy.server.modules.comment.dto.CommentResponse;
 import com.blocksy.server.modules.comment.entity.PostCommentEntity;
 import com.blocksy.server.modules.comment.mapper.PostCommentMapper;
 import com.blocksy.server.modules.comment.service.CommentService;
+import com.blocksy.server.modules.notification.service.NotificationService;
 import com.blocksy.server.modules.post.entity.PostEntity;
 import com.blocksy.server.modules.post.mapper.PostMapper;
 import org.springframework.stereotype.Service;
@@ -21,10 +22,16 @@ public class CommentServiceImpl implements CommentService {
 
     private final PostCommentMapper postCommentMapper;
     private final PostMapper postMapper;
+    private final NotificationService notificationService;
 
-    public CommentServiceImpl(PostCommentMapper postCommentMapper, PostMapper postMapper) {
+    public CommentServiceImpl(
+            PostCommentMapper postCommentMapper,
+            PostMapper postMapper,
+            NotificationService notificationService
+    ) {
         this.postCommentMapper = postCommentMapper;
         this.postMapper = postMapper;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -54,6 +61,17 @@ public class CommentServiceImpl implements CommentService {
         post.setCommentCount((post.getCommentCount() == null ? 0 : post.getCommentCount()) + 1);
         post.setUpdatedAt(now);
         postMapper.updateById(post);
+
+        if (!userId.equals(post.getUserId())) {
+            notificationService.create(
+                    post.getUserId(),
+                    "COMMENT",
+                    "评论通知",
+                    "你的帖子收到一条新评论",
+                    post.getId(),
+                    "POST"
+            );
+        }
 
         return new CommentResponse(entity.getId(), entity.getPostId(), entity.getUserId(), entity.getContent(), entity.getCreatedAt());
     }

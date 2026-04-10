@@ -4,14 +4,18 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.blocksy.server.common.exception.BusinessException;
 import com.blocksy.server.modules.community.entity.CommunityEntity;
 import com.blocksy.server.modules.community.mapper.CommunityMapper;
+import com.blocksy.server.modules.user.dto.AdminUserPunishLogResponse;
 import com.blocksy.server.modules.user.dto.UserCommunityItemResponse;
 import com.blocksy.server.modules.user.entity.UserCommunityEntity;
 import com.blocksy.server.modules.user.entity.UserEntity;
+import com.blocksy.server.modules.user.entity.UserPunishLogEntity;
 import com.blocksy.server.modules.user.mapper.UserCommunityMapper;
 import com.blocksy.server.modules.user.mapper.UserMapper;
+import com.blocksy.server.modules.user.mapper.UserPunishLogMapper;
 import com.blocksy.server.modules.user.service.UserService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -26,11 +30,18 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final UserCommunityMapper userCommunityMapper;
     private final CommunityMapper communityMapper;
+    private final UserPunishLogMapper userPunishLogMapper;
 
-    public UserServiceImpl(UserMapper userMapper, UserCommunityMapper userCommunityMapper, CommunityMapper communityMapper) {
+    public UserServiceImpl(
+            UserMapper userMapper,
+            UserCommunityMapper userCommunityMapper,
+            CommunityMapper communityMapper,
+            UserPunishLogMapper userPunishLogMapper
+    ) {
         this.userMapper = userMapper;
         this.userCommunityMapper = userCommunityMapper;
         this.communityMapper = communityMapper;
+        this.userPunishLogMapper = userPunishLogMapper;
     }
 
     @Override
@@ -57,33 +68,103 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public List<UserEntity> listBlacklistedUsers() {
+        return userMapper.selectList(
+                new LambdaQueryWrapper<UserEntity>()
+                        .eq(UserEntity::getStatus, 0)
+                        .orderByDesc(UserEntity::getUpdatedAt)
+                        .orderByDesc(UserEntity::getId)
+                        .last("LIMIT 500")
+        );
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void banUser(Long userId) {
+        banUser(userId, null, "系统封禁", null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void banUser(Long userId, Long operatorUserId, String reason, Integer durationHours) {
         UserEntity user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException("用户不存在");
         }
+        if (durationHours != null && durationHours <= 0) {
+            throw new BusinessException("封禁时长必须大于 0");
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime bannedUntil = durationHours == null ? null : now.plusHours(durationHours);
         user.setStatus(0);
-        user.setUpdatedAt(OffsetDateTime.now());
+        user.setBanReason(StringUtils.hasText(reason) ? reason : "管理员封禁");
+        user.setBannedBy(operatorUserId);
+        user.setBannedAt(now);
+        user.setBannedUntil(bannedUntil);
+        user.setUpdatedAt(now);
         userMapper.updateById(user);
+        insertPunishLog(userId, operatorUserId, "BAN", user.getBanReason(), durationHours, bannedUntil);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void unbanUser(Long userId) {
+        unbanUser(userId, null, "系统解封");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void unbanUser(Long userId, Long operatorUserId, String reason) {
         UserEntity user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException("用户不存在");
         }
+        OffsetDateTime now = OffsetDateTime.now();
         user.setStatus(1);
-        user.setUpdatedAt(OffsetDateTime.now());
+        user.setBanReason(null);
+        user.setBannedBy(null);
+        user.setBannedAt(null);
+        user.setBannedUntil(null);
+        user.setUpdatedAt(now);
         userMapper.updateById(user);
+        insertPunishLog(userId, operatorUserId, "UNBAN", reason, null, null);
     }
 
     @Override
     public boolean isUserActive(Long userId) {
         UserEntity user = userMapper.selectById(userId);
-        return user != null && user.getStatus() != null && user.getStatus() == 1;
+        if (user == null || user.getStatus() == null) {
+            return false;
+        }
+        if (user.getStatus() == 1) {
+            return true;
+        }
+        OffsetDateTime bannedUntil = user.getBannedUntil();
+        if (bannedUntil != null && bannedUntil.isBefore(OffsetDateTime.now())) {
+            unbanUser(userId, null, "封禁时效到期自动解封");
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public List<AdminUserPunishLogResponse> listPunishLogs(Long userId) {
+        return userPunishLogMapper.selectList(
+                new LambdaQueryWrapper<UserPunishLogEntity>()
+                        .eq(UserPunishLogEntity::getUserId, userId)
+                        .eq(UserPunishLogEntity::getStatus, 1)
+                        .orderByDesc(UserPunishLogEntity::getCreatedAt)
+                        .last("LIMIT 100")
+        ).stream().map(log -> new AdminUserPunishLogResponse(
+                log.getId(),
+                log.getUserId(),
+                log.getOperatorUserId(),
+                log.getAction(),
+                log.getReason(),
+                log.getDurationHours(),
+                log.getExpiresAt(),
+                log.getCreatedAt()
+        )).toList();
     }
 
     @Override
@@ -92,7 +173,7 @@ public class UserServiceImpl implements UserService {
                 new LambdaQueryWrapper<UserCommunityEntity>()
                         .eq(UserCommunityEntity::getUserId, userId)
                         .eq(UserCommunityEntity::getStatus, 1)
-                        .orderByDesc(UserCommunityEntity::getIsDefault)
+                        .orderByDesc(UserCommunityEntity::getDefaultFlag)
                         .orderByAsc(UserCommunityEntity::getCommunityId)
         );
         if (relations.isEmpty()) {
@@ -113,7 +194,7 @@ public class UserServiceImpl implements UserService {
                             community.getId(),
                             community.getCode(),
                             community.getName(),
-                            Boolean.TRUE.equals(item.getIsDefault())
+                            Boolean.TRUE.equals(item.getDefaultFlag())
                     );
                 }).toList();
     }
@@ -124,7 +205,7 @@ public class UserServiceImpl implements UserService {
                 new LambdaQueryWrapper<UserCommunityEntity>()
                         .eq(UserCommunityEntity::getUserId, userId)
                         .eq(UserCommunityEntity::getStatus, 1)
-                        .eq(UserCommunityEntity::getIsDefault, true)
+                        .eq(UserCommunityEntity::getDefaultFlag, true)
                         .last("LIMIT 1")
         );
         if (relation != null) {
@@ -159,7 +240,7 @@ public class UserServiceImpl implements UserService {
         );
         UserCommunityEntity target = null;
         for (UserCommunityEntity relation : allRelations) {
-            relation.setIsDefault(relation.getCommunityId().equals(communityId));
+            relation.setDefaultFlag(relation.getCommunityId().equals(communityId));
             relation.setUpdatedAt(now);
             userCommunityMapper.updateById(relation);
             if (relation.getCommunityId().equals(communityId)) {
@@ -170,11 +251,33 @@ public class UserServiceImpl implements UserService {
             UserCommunityEntity newRelation = new UserCommunityEntity();
             newRelation.setUserId(userId);
             newRelation.setCommunityId(communityId);
-            newRelation.setIsDefault(true);
+            newRelation.setDefaultFlag(true);
             newRelation.setStatus(1);
             newRelation.setCreatedAt(now);
             newRelation.setUpdatedAt(now);
             userCommunityMapper.insert(newRelation);
         }
+    }
+
+    private void insertPunishLog(
+            Long userId,
+            Long operatorUserId,
+            String action,
+            String reason,
+            Integer durationHours,
+            OffsetDateTime expiresAt
+    ) {
+        OffsetDateTime now = OffsetDateTime.now();
+        UserPunishLogEntity log = new UserPunishLogEntity();
+        log.setUserId(userId);
+        log.setOperatorUserId(operatorUserId);
+        log.setAction(action);
+        log.setReason(reason);
+        log.setDurationHours(durationHours);
+        log.setExpiresAt(expiresAt);
+        log.setStatus(1);
+        log.setCreatedAt(now);
+        log.setUpdatedAt(now);
+        userPunishLogMapper.insert(log);
     }
 }

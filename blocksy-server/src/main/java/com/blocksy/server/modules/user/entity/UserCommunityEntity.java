@@ -17,7 +17,7 @@ public class UserCommunityEntity {
     @TableField("community_id")
     private Long communityId;
     @TableField("is_default")
-    private Boolean isDefault;
+    private Boolean defaultFlag;
     private Integer status;
     @TableField("created_at")
     private LocalDateTime createdAt;
@@ -48,12 +48,12 @@ public class UserCommunityEntity {
         this.communityId = communityId;
     }
 
-    public Boolean getIsDefault() {
-        return isDefault;
+    public Boolean getDefaultFlag() {
+        return defaultFlag;
     }
 
-    public void setIsDefault(Boolean isDefault) {
-        this.isDefault = isDefault;
+    public void setDefaultFlag(Boolean defaultFlag) {
+        this.defaultFlag = defaultFlag;
     }
 
     public Integer getStatus() {

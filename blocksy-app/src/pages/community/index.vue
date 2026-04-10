@@ -10,7 +10,9 @@
       </view>
       <view class="header">
         <button class="back-btn" @click="goHome">返回首页</button>
-        <button class="back-btn" :loading="loading" @click="loadCommunities">刷新</button>
+        <button class="back-btn" :class="{ 'is-loading': loading }" :disabled="loading" @click="loadCommunities">
+          {{ loading ? "刷新中..." : "刷新" }}
+        </button>
       </view>
     <skeleton-list v-if="loading" :count="3" />
     <view v-for="item in pagedCommunities" :key="item.communityId" class="card">
@@ -33,12 +35,12 @@
       @cta="goHome"
     />
     <list-pager
-      v-if="!loading && communities.length > pageSize"
-      :page="page"
-      :page-size="pageSize"
+      v-if="!loading && communities.length > pager.pageSize"
+      :page="pager.page"
+      :page-size="pager.pageSize"
       :total="communities.length"
-      @prev="prevPage"
-      @next="nextPage"
+      @prev="pager.prevPage"
+      @next="pager.nextPage"
     />
     </view>
     <view class="side-col">
@@ -64,18 +66,15 @@ import EmptyState from "../../components/EmptyState.vue";
 import { withMinDuration } from "../../utils/async";
 import ListPager from "../../components/ListPager.vue";
 import { useH5PullRefresh } from "../../utils/pull-refresh";
+import { usePagedList } from "../../utils/paged-list";
 
 const userStore = useUserStore();
 userStore.hydrate();
 const loading = ref(false);
-const page = ref(1);
-const pageSize = 6;
 
 const communities = computed(() => userStore.communities);
-const pagedCommunities = computed(() => {
-  const start = (page.value - 1) * pageSize;
-  return communities.value.slice(start, start + pageSize);
-});
+const pager = usePagedList(communities, 6);
+const pagedCommunities = computed(() => pager.pagedItems.value);
 
 async function loadCommunities() {
   if (!userStore.token) {
@@ -88,27 +87,12 @@ async function loadCommunities() {
     await withMinDuration(async () => {
       await userStore.fetchCommunities();
     });
-    page.value = 1;
+    pager.resetPage();
   } catch (error) {
     uni.showToast({ title: (error as Error).message || "加载社区失败", icon: "none" });
   } finally {
     loading.value = false;
   }
-}
-
-function prevPage() {
-  if (page.value <= 1) {
-    return;
-  }
-  page.value -= 1;
-}
-
-function nextPage() {
-  const totalPages = Math.ceil(communities.value.length / pageSize);
-  if (page.value >= totalPages) {
-    return;
-  }
-  page.value += 1;
 }
 
 function goHome() {
@@ -167,8 +151,27 @@ onMounted(() => {
 }
 
 .back-btn {
+  position: relative;
   border: 1px solid var(--line);
   background: #fff;
+}
+
+.back-btn.is-loading {
+  padding-right: 30px;
+}
+
+.back-btn.is-loading::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
 }
 
 .card {

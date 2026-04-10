@@ -20,6 +20,14 @@ public class UserEntity {
     private String avatarUrl;
     private String phone;
     private String email;
+    @TableField("ban_reason")
+    private String banReason;
+    @TableField("banned_by")
+    private Long bannedBy;
+    @TableField("banned_at")
+    private OffsetDateTime bannedAt;
+    @TableField("banned_until")
+    private OffsetDateTime bannedUntil;
     private Integer status;
     @TableField("created_at")
     private OffsetDateTime createdAt;
@@ -80,6 +88,38 @@ public class UserEntity {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getBanReason() {
+        return banReason;
+    }
+
+    public void setBanReason(String banReason) {
+        this.banReason = banReason;
+    }
+
+    public Long getBannedBy() {
+        return bannedBy;
+    }
+
+    public void setBannedBy(Long bannedBy) {
+        this.bannedBy = bannedBy;
+    }
+
+    public OffsetDateTime getBannedAt() {
+        return bannedAt;
+    }
+
+    public void setBannedAt(OffsetDateTime bannedAt) {
+        this.bannedAt = bannedAt;
+    }
+
+    public OffsetDateTime getBannedUntil() {
+        return bannedUntil;
+    }
+
+    public void setBannedUntil(OffsetDateTime bannedUntil) {
+        this.bannedUntil = bannedUntil;
     }
 
     public Integer getStatus() {

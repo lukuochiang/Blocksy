@@ -6,6 +6,13 @@ interface ApiResponse<T> {
   data: T;
 }
 
+export interface PageData<T> {
+  page: number;
+  pageSize: number;
+  total: number;
+  items: T[];
+}
+
 export interface AdminPostItem {
   id: number;
   userId: number;
@@ -22,14 +29,16 @@ export interface AdminPostQuery {
   status?: number;
   communityId?: number;
   keyword?: string;
+  page?: number;
+  pageSize?: number;
 }
 
-export async function fetchAdminPosts(query: AdminPostQuery): Promise<AdminPostItem[]> {
-  const response = await http.get<ApiResponse<AdminPostItem[]>>("/admin/posts", { params: query });
+export async function fetchAdminPosts(query: AdminPostQuery): Promise<PageData<AdminPostItem>> {
+  const response = await http.get<ApiResponse<PageData<AdminPostItem>>>("/admin/posts", { params: query });
   if (response.data.code !== 0) {
     throw new Error(response.data.message || "获取帖子审核列表失败");
   }
-  return response.data.data || [];
+  return response.data.data || { page: 1, pageSize: 10, total: 0, items: [] };
 }
 
 export async function reviewAdminPost(postId: number, action: "APPROVE" | "REJECT"): Promise<void> {

@@ -71,7 +71,7 @@ export const menuGroups: MenuGroupItem[] = [
   {
     label: "消息与推送",
     children: [
-      { label: "站内信模板", path: "/messages/templates" },
+      { label: "备注模板管理", path: "/messages/templates" },
       { label: "系统通知", path: "/messages/system" },
       { label: "Push 推送", path: "/messages/push" },
       { label: "推送记录", path: "/messages/records" }
@@ -93,6 +93,7 @@ export const menuGroups: MenuGroupItem[] = [
     children: [
       { label: "角色管理", path: "/permissions/roles" },
       { label: "菜单权限", path: "/permissions/menus" },
+      { label: "登录日志", path: "/permissions/login-logs" },
       { label: "数据权限", path: "/permissions/data" },
       { label: "操作日志", path: "/permissions/logs" }
     ]

@@ -22,7 +22,7 @@ public class NotificationEntity {
     @TableField("related_type")
     private String relatedType;
     @TableField("is_read")
-    private Boolean isRead;
+    private Boolean read;
     private Integer status;
     @TableField("created_at")
     private LocalDateTime createdAt;
@@ -43,8 +43,8 @@ public class NotificationEntity {
     public void setRelatedId(Long relatedId) { this.relatedId = relatedId; }
     public String getRelatedType() { return relatedType; }
     public void setRelatedType(String relatedType) { this.relatedType = relatedType; }
-    public Boolean getRead() { return isRead; }
-    public void setRead(Boolean read) { isRead = read; }
+    public Boolean getRead() { return read; }
+    public void setRead(Boolean read) { this.read = read; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
